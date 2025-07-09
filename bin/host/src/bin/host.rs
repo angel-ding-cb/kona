@@ -50,10 +50,11 @@ async fn main() -> Result<()> {
     // Workaround for op-challenger compatibility: if --server or --native is passed
     // without a subcommand, automatically inject 'single' subcommand
     let args: Vec<String> = std::env::args().collect();
-    let modified_args = if args.len() > 1 && 
-        (args.contains(&"--server".to_string()) || args.contains(&"--native".to_string())) &&
-        !args.contains(&"single".to_string()) && 
-        !args.contains(&"super".to_string()) {
+    
+    let has_server_or_native = args.iter().any(|arg| arg == "--server" || arg == "--native");
+    let has_subcommand = args.iter().any(|arg| arg == "single" || arg == "super");
+    
+    let modified_args = if args.len() > 1 && has_server_or_native && !has_subcommand {
         // Insert 'single' after the program name
         let mut new_args = vec![args[0].clone(), "single".to_string()];
         new_args.extend_from_slice(&args[1..]);

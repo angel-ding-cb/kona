@@ -105,6 +105,7 @@ pub struct SingleChainHost {
     #[arg(
         long,
         alias = "rollup-cfg",
+        visible_alias = "rollup.config",
         conflicts_with = "l2_chain_id",
         required_unless_present = "l2_chain_id",
         env
