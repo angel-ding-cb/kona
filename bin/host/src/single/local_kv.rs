@@ -28,11 +28,11 @@ impl KeyValueStore for SingleChainLocalInputs {
     fn get(&self, key: B256) -> Option<Vec<u8>> {
         let preimage_key = PreimageKey::try_from(*key).ok()?;
         match preimage_key.key_value() {
-            L1_HEAD_KEY => Some(self.cfg.l1_head.to_vec()),
-            L2_OUTPUT_ROOT_KEY => Some(self.cfg.agreed_l2_output_root.to_vec()),
-            L2_CLAIM_KEY => Some(self.cfg.claimed_l2_output_root.to_vec()),
+            L1_HEAD_KEY => self.cfg.l1_head.map(|h| h.to_vec()),
+            L2_OUTPUT_ROOT_KEY => self.cfg.agreed_l2_output_root.map(|r| r.to_vec()),
+            L2_CLAIM_KEY => self.cfg.claimed_l2_output_root.map(|r| r.to_vec()),
             L2_CLAIM_BLOCK_NUMBER_KEY => {
-                Some(self.cfg.claimed_l2_block_number.to_be_bytes().to_vec())
+                self.cfg.claimed_l2_block_number.map(|n| n.to_be_bytes().to_vec())
             }
             L2_CHAIN_ID_KEY => {
                 Some(self.cfg.l2_chain_id.unwrap_or_default().to_be_bytes().to_vec())

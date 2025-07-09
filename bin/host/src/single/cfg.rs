@@ -31,26 +31,24 @@ use tokio::{
 pub struct SingleChainHost {
     /// Hash of the L1 head block. Derivation stops after this block is processed.
     #[arg(long, visible_alias = "l1.head", env)]
-    pub l1_head: B256,
+    pub l1_head: Option<B256>,
     /// Hash of the agreed upon safe L2 block committed to by `--agreed-l2-output-root`.
     #[arg(long, visible_alias = "l2-head", visible_alias = "l2.head", env)]
-    pub agreed_l2_head_hash: B256,
+    pub agreed_l2_head_hash: Option<B256>,
     /// Agreed safe L2 Output Root to start derivation from.
     #[arg(long, visible_alias = "l2-output-root", visible_alias = "l2.outputroot", env)]
-    pub agreed_l2_output_root: B256,
+    pub agreed_l2_output_root: Option<B256>,
     /// Claimed L2 output root at block # `--claimed-l2-block-number` to validate.
     #[arg(long, visible_alias = "l2-claim", visible_alias = "l2.claim", env)]
-    pub claimed_l2_output_root: B256,
+    pub claimed_l2_output_root: Option<B256>,
     /// Number of the L2 block that the claimed output root commits to.
     #[arg(long, visible_alias = "l2-block-number", visible_alias = "l2.blocknumber", env)]
-    pub claimed_l2_block_number: u64,
+    pub claimed_l2_block_number: Option<u64>,
     /// Address of L2 JSON-RPC endpoint to use (eth and debug namespace required).
     #[arg(
         long,
         visible_alias = "l2",
         visible_alias = "l2.node",
-        requires = "l1_node_address",
-        requires = "l1_beacon_address",
         env
     )]
     pub l2_node_address: Option<String>,
@@ -59,8 +57,6 @@ pub struct SingleChainHost {
         long,
         visible_alias = "l1",
         visible_alias = "l1.node",
-        requires = "l2_node_address",
-        requires = "l1_beacon_address",
         env
     )]
     pub l1_node_address: Option<String>,
@@ -69,8 +65,6 @@ pub struct SingleChainHost {
         long,
         visible_alias = "beacon",
         visible_alias = "l1.beacon",
-        requires = "l1_node_address",
-        requires = "l2_node_address",
         env
     )]
     pub l1_beacon_address: Option<String>,
@@ -80,23 +74,20 @@ pub struct SingleChainHost {
         long,
         visible_alias = "db",
         visible_alias = "datadir",
-        required_unless_present_all = ["l2_node_address", "l1_node_address", "l1_beacon_address"],
         env
     )]
     pub data_dir: Option<PathBuf>,
     /// Run the client program natively.
-    #[arg(long, conflicts_with = "server", required_unless_present = "server")]
+    #[arg(long, conflicts_with = "server")]
     pub native: bool,
     /// Run in pre-image server mode without executing any client program. If not provided, the
     /// host will run the client program in the host process.
-    #[arg(long, conflicts_with = "native", required_unless_present = "native")]
+    #[arg(long, conflicts_with = "native")]
     pub server: bool,
     /// The L2 chain ID of a supported chain. If provided, the host will look for the corresponding
     /// rollup config in the superchain registry.
     #[arg(
         long,
-        conflicts_with = "rollup_config_path",
-        required_unless_present = "rollup_config_path",
         env
     )]
     pub l2_chain_id: Option<u64>,
@@ -106,8 +97,6 @@ pub struct SingleChainHost {
         long,
         alias = "rollup-cfg",
         visible_alias = "rollup.config",
-        conflicts_with = "l2_chain_id",
-        required_unless_present = "l2_chain_id",
         env
     )]
     pub rollup_config_path: Option<PathBuf>,
@@ -323,6 +312,55 @@ mod test {
     use clap::Parser;
 
     #[test]
+    fn test_op_challenger_compatibility() {
+        // Test that OpProgramServerExecutor-style arguments work
+        let op_challenger_args = [
+            "single",
+            "--server",
+            "--l1.head", "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+            "--l2.head", "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+            "--l2.claim", "0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321",
+            "--l2.blocknumber", "12345678",
+            "--l2.outputroot", "0x9876543210fedcba9876543210fedcba9876543210fedcba9876543210fedcba",
+            "--l1.beacon", "https://beacon-url.com",
+            "--l1", "https://l1-url.com", 
+            "--l2", "https://l2-url.com",
+            "--datadir", "/tmp/test-data",
+            "--network", "mainnet",
+            "--log.level", "INFO",
+            "--l2.experimental", "https://experimental-url.com",
+        ];
+
+        let parsed = SingleChainHost::try_parse_from(op_challenger_args);
+        assert!(parsed.is_ok(), "OpProgramServerExecutor-style arguments should parse successfully: {:?}", parsed.err());
+        
+        let config = parsed.unwrap();
+        assert!(config.server, "Server mode should be enabled");
+        assert_eq!(config.l1_node_address, Some("https://l1-url.com".to_string()));
+        assert_eq!(config.l2_node_address, Some("https://l2-url.com".to_string()));
+        assert_eq!(config.l1_beacon_address, Some("https://beacon-url.com".to_string()));
+        assert_eq!(config.data_dir, Some(std::path::PathBuf::from("/tmp/test-data")));
+        assert_eq!(config.network, Some("mainnet".to_string()));
+        assert_eq!(config.log_level, Some("INFO".to_string()));
+    }
+
+    #[test]
+    fn test_minimal_op_challenger_args() {
+        // Test with minimal required arguments that op-challenger might provide
+        let minimal_args = [
+            "single",
+            "--server",
+            "--l1", "https://l1-url.com",
+            "--l1.beacon", "https://beacon-url.com", 
+            "--l2", "https://l2-url.com",
+            "--datadir", "/tmp/test-data",
+        ];
+
+        let parsed = SingleChainHost::try_parse_from(minimal_args);
+        assert!(parsed.is_ok(), "Minimal OpProgramServerExecutor arguments should parse: {:?}", parsed.err());
+    }
+
+    #[test]
     fn test_flags() {
         let zero_hash_str = &B256::ZERO.to_string();
         let default_flags = [
@@ -340,7 +378,7 @@ mod test {
         ];
 
         let cases = [
-            // valid
+            // valid - these should all pass with the new permissive configuration
             (["--server", "--l2-chain-id", "0", "--data-dir", "dummy"].as_slice(), true),
             (["--server", "--rollup-config-path", "dummy", "--data-dir", "dummy"].as_slice(), true),
             (["--native", "--l2-chain-id", "0", "--data-dir", "dummy"].as_slice(), true),
@@ -372,17 +410,18 @@ mod test {
                 .as_slice(),
                 true,
             ),
-            // invalid
+            // These are now valid due to op-challenger compatibility changes
+            (["--server"].as_slice(), true),
+            (["--native"].as_slice(), true),
+            (["--rollup-config-path", "dummy"].as_slice(), true),
+            (["--l2-chain-id", "0"].as_slice(), true),
+            (["--l1-node-address", "dummy", "--server", "--l2-chain-id", "0"].as_slice(), true),
+            (["--l2-node-address", "dummy", "--server", "--l2-chain-id", "0"].as_slice(), true),
+            (["--l1-beacon-address", "dummy", "--server", "--l2-chain-id", "0"].as_slice(), true),
+            // invalid - conflicts still apply
             (["--server", "--native", "--l2-chain-id", "0"].as_slice(), false),
-            (["--l2-chain-id", "0", "--rollup-config-path", "dummy", "--server"].as_slice(), false),
-            (["--server"].as_slice(), false),
-            (["--native"].as_slice(), false),
-            (["--rollup-config-path", "dummy"].as_slice(), false),
-            (["--l2-chain-id", "0"].as_slice(), false),
-            (["--l1-node-address", "dummy", "--server", "--l2-chain-id", "0"].as_slice(), false),
-            (["--l2-node-address", "dummy", "--server", "--l2-chain-id", "0"].as_slice(), false),
-            (["--l1-beacon-address", "dummy", "--server", "--l2-chain-id", "0"].as_slice(), false),
-            ([].as_slice(), false),
+            // empty args now valid due to op-challenger compatibility
+            ([].as_slice(), true),
         ];
 
         for (args_ext, valid) in cases.into_iter() {

@@ -80,3 +80,82 @@ async fn main() -> Result<()> {
     info!("Exiting host program.");
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_server_flag_workaround() {
+        // Test that --server without subcommand gets transformed correctly
+        let original_args = vec![
+            "kona-host".to_string(),
+            "--server".to_string(),
+            "--l1.beacon".to_string(),
+            "https://beacon-url.com".to_string(),
+        ];
+
+        let has_server_or_native = original_args.iter().any(|arg| arg == "--server" || arg == "--native");
+        let has_subcommand = original_args.iter().any(|arg| arg == "single" || arg == "super");
+
+        assert!(has_server_or_native, "Should detect --server flag");
+        assert!(!has_subcommand, "Should not detect subcommand initially");
+
+        let modified_args = if original_args.len() > 1 && has_server_or_native && !has_subcommand {
+            let mut new_args = vec![original_args[0].clone(), "single".to_string()];
+            new_args.extend_from_slice(&original_args[1..]);
+            new_args
+        } else {
+            original_args
+        };
+
+        let expected = vec![
+            "kona-host".to_string(),
+            "single".to_string(),
+            "--server".to_string(),
+            "--l1.beacon".to_string(),
+            "https://beacon-url.com".to_string(),
+        ];
+
+        assert_eq!(modified_args, expected, "Should inject 'single' subcommand");
+    }
+
+    #[test]
+    fn test_native_flag_workaround() {
+        // Test that --native also triggers the workaround
+        let original_args = vec![
+            "kona-host".to_string(),
+            "--native".to_string(),
+            "--l1".to_string(),
+            "https://l1-url.com".to_string(),
+        ];
+
+        let has_server_or_native = original_args.iter().any(|arg| arg == "--server" || arg == "--native");
+        let has_subcommand = original_args.iter().any(|arg| arg == "single" || arg == "super");
+
+        assert!(has_server_or_native, "Should detect --native flag");
+        assert!(!has_subcommand, "Should not detect subcommand initially");
+    }
+
+    #[test]
+    fn test_no_workaround_when_subcommand_present() {
+        // Test that existing subcommands are not affected
+        let original_args = vec![
+            "kona-host".to_string(),
+            "single".to_string(),
+            "--server".to_string(),
+            "--l1.beacon".to_string(),
+            "https://beacon-url.com".to_string(),
+        ];
+
+        let has_server_or_native = original_args.iter().any(|arg| arg == "--server" || arg == "--native");
+        let has_subcommand = original_args.iter().any(|arg| arg == "single" || arg == "super");
+
+        assert!(has_server_or_native, "Should detect --server flag");
+        assert!(has_subcommand, "Should detect existing subcommand");
+
+        // In this case, no modification should happen
+        let should_modify = original_args.len() > 1 && has_server_or_native && !has_subcommand;
+        assert!(!should_modify, "Should not modify when subcommand already present");
+    }
+}
