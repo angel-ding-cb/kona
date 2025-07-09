@@ -30,24 +30,25 @@ use tokio::{
 #[command(styles = cli_styles())]
 pub struct SingleChainHost {
     /// Hash of the L1 head block. Derivation stops after this block is processed.
-    #[arg(long, env)]
+    #[arg(long, visible_alias = "l1.head", env)]
     pub l1_head: B256,
     /// Hash of the agreed upon safe L2 block committed to by `--agreed-l2-output-root`.
-    #[arg(long, visible_alias = "l2-head", env)]
+    #[arg(long, visible_alias = "l2-head", visible_alias = "l2.head", env)]
     pub agreed_l2_head_hash: B256,
     /// Agreed safe L2 Output Root to start derivation from.
-    #[arg(long, visible_alias = "l2-output-root", env)]
+    #[arg(long, visible_alias = "l2-output-root", visible_alias = "l2.outputroot", env)]
     pub agreed_l2_output_root: B256,
     /// Claimed L2 output root at block # `--claimed-l2-block-number` to validate.
-    #[arg(long, visible_alias = "l2-claim", env)]
+    #[arg(long, visible_alias = "l2-claim", visible_alias = "l2.claim", env)]
     pub claimed_l2_output_root: B256,
     /// Number of the L2 block that the claimed output root commits to.
-    #[arg(long, visible_alias = "l2-block-number", env)]
+    #[arg(long, visible_alias = "l2-block-number", visible_alias = "l2.blocknumber", env)]
     pub claimed_l2_block_number: u64,
     /// Address of L2 JSON-RPC endpoint to use (eth and debug namespace required).
     #[arg(
         long,
         visible_alias = "l2",
+        visible_alias = "l2.node",
         requires = "l1_node_address",
         requires = "l1_beacon_address",
         env
@@ -57,6 +58,7 @@ pub struct SingleChainHost {
     #[arg(
         long,
         visible_alias = "l1",
+        visible_alias = "l1.node",
         requires = "l2_node_address",
         requires = "l1_beacon_address",
         env
@@ -66,6 +68,7 @@ pub struct SingleChainHost {
     #[arg(
         long,
         visible_alias = "beacon",
+        visible_alias = "l1.beacon",
         requires = "l1_node_address",
         requires = "l2_node_address",
         env
@@ -76,6 +79,7 @@ pub struct SingleChainHost {
     #[arg(
         long,
         visible_alias = "db",
+        visible_alias = "datadir",
         required_unless_present_all = ["l2_node_address", "l1_node_address", "l1_beacon_address"],
         env
     )]
@@ -110,6 +114,27 @@ pub struct SingleChainHost {
     /// the execution layer.
     #[arg(long, env)]
     pub enable_experimental_witness_endpoint: bool,
+    /// L2 agreed prestate (compatibility with OpProgramServerExecutor, currently unused)
+    #[arg(long, visible_alias = "l2.agreed-prestate", env)]
+    pub l2_agreed_prestate: Option<String>,
+    /// Dependency set configuration (compatibility with OpProgramServerExecutor, currently unused)
+    #[arg(long, visible_alias = "depset.config", env)]
+    pub depset_config: Option<String>,
+    /// Network configuration (compatibility with OpProgramServerExecutor, currently unused)
+    #[arg(long, env)]
+    pub network: Option<String>,
+    /// L2 genesis configuration (compatibility with OpProgramServerExecutor, currently unused)
+    #[arg(long, visible_alias = "l2.genesis", env)]
+    pub l2_genesis: Option<String>,
+    /// L2 experimental configuration (compatibility with OpProgramServerExecutor, currently unused)
+    #[arg(long, visible_alias = "l2.experimental", env)]
+    pub l2_experimental: Option<String>,
+    /// Log level (compatibility with OpProgramServerExecutor, currently unused)
+    #[arg(long, visible_alias = "log.level", env)]
+    pub log_level: Option<String>,
+    /// L2 custom configuration (compatibility with OpProgramServerExecutor, currently unused)
+    #[arg(long, visible_alias = "l2.custom", env)]
+    pub l2_custom: Option<String>,
 }
 
 /// An error that can occur when handling single chain hosts
