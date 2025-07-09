@@ -47,7 +47,22 @@ pub enum HostMode {
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
-    let cfg = HostCli::parse();
+    // Workaround for op-challenger compatibility: if --server or --native is passed
+    // without a subcommand, automatically inject 'single' subcommand
+    let args: Vec<String> = std::env::args().collect();
+    let modified_args = if args.len() > 1 && 
+        (args.contains(&"--server".to_string()) || args.contains(&"--native".to_string())) &&
+        !args.contains(&"single".to_string()) && 
+        !args.contains(&"super".to_string()) {
+        // Insert 'single' after the program name
+        let mut new_args = vec![args[0].clone(), "single".to_string()];
+        new_args.extend_from_slice(&args[1..]);
+        new_args
+    } else {
+        args
+    };
+
+    let cfg = HostCli::try_parse_from(modified_args)?;
     init_tracing_subscriber(cfg.v, None::<EnvFilter>)?;
 
     match cfg.mode {
