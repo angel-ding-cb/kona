@@ -148,8 +148,62 @@ pub enum SingleChainHostError {
 }
 
 impl SingleChainHost {
+    /// Maps network names to L2 chain IDs for OpProgramServerExecutor compatibility.
+    fn network_to_chain_id(network: &str) -> Option<u64> {
+        match network.to_lowercase().as_str() {
+            // OP Stack chains
+            "mainnet" | "op" | "op-mainnet" => Some(10),
+            "sepolia" | "op-sepolia" => Some(11155420),
+            
+            // Base chains  
+            "base" | "base-mainnet" => Some(8453),
+            "base-sepolia" => Some(84532),
+            
+            // Mode chains
+            "mode" | "mode-mainnet" => Some(34443),
+            "mode-sepolia" => Some(919),
+            
+            // Zora chains
+            "zora" | "zora-mainnet" => Some(7777777),
+            "zora-sepolia" => Some(999999999),
+            
+            // Other common networks
+            "frax" | "frax-mainnet" => Some(252),
+            "frax-sepolia" => Some(2522),
+            
+            _ => None,
+        }
+    }
+
+    /// Gets the effective L2 chain ID, preferring explicit --l2-chain-id over --network mapping.
+    pub fn get_effective_chain_id(&self) -> Option<u64> {
+        // Explicit --l2-chain-id takes precedence
+        if let Some(chain_id) = self.l2_chain_id {
+            return Some(chain_id);
+        }
+        
+        // Fall back to --network mapping
+        if let Some(ref network) = self.network {
+            return Self::network_to_chain_id(network);
+        }
+        
+        None
+    }
     /// Starts the [SingleChainHost] application.
     pub async fn start(self) -> Result<(), SingleChainHostError> {
+        // Debug: Log the received configuration
+        let effective_chain_id = self.get_effective_chain_id();
+        println!("DEBUG: kona-host received l2_chain_id: {:?}, network: {:?}", self.l2_chain_id, self.network);
+        println!("DEBUG: effective chain ID: {:?}", effective_chain_id);
+        
+        if effective_chain_id.is_none() {
+            println!("WARNING: No chain ID could be determined from --l2-chain-id or --network.");
+            println!("For Base networks, you can pass:");
+            println!("  --network base (for Base Mainnet, chain ID 8453)");
+            println!("  --network base-sepolia (for Base Sepolia, chain ID 84532)");
+            println!("  Or directly: --l2-chain-id 8453 or --l2-chain-id 84532");
+        }
+        
         if self.server {
             let hint = FileChannel::new(FileDescriptor::HintRead, FileDescriptor::HintWrite);
             let preimage =
@@ -342,6 +396,132 @@ mod test {
         assert_eq!(config.data_dir, Some(std::path::PathBuf::from("/tmp/test-data")));
         assert_eq!(config.network, Some("mainnet".to_string()));
         assert_eq!(config.log_level, Some("INFO".to_string()));
+    }
+
+    #[test]
+    fn test_network_to_chain_id_mapping() {
+        // Test Base networks
+        assert_eq!(SingleChainHost::network_to_chain_id("base"), Some(8453));
+        assert_eq!(SingleChainHost::network_to_chain_id("base-mainnet"), Some(8453));
+        assert_eq!(SingleChainHost::network_to_chain_id("base-sepolia"), Some(84532));
+        
+        // Test OP networks
+        assert_eq!(SingleChainHost::network_to_chain_id("mainnet"), Some(10));
+        assert_eq!(SingleChainHost::network_to_chain_id("op"), Some(10));
+        assert_eq!(SingleChainHost::network_to_chain_id("op-mainnet"), Some(10));
+        assert_eq!(SingleChainHost::network_to_chain_id("sepolia"), Some(11155420));
+        assert_eq!(SingleChainHost::network_to_chain_id("op-sepolia"), Some(11155420));
+        
+        // Test case insensitive
+        assert_eq!(SingleChainHost::network_to_chain_id("BASE"), Some(8453));
+        assert_eq!(SingleChainHost::network_to_chain_id("Base-Sepolia"), Some(84532));
+        
+        // Test unknown network
+        assert_eq!(SingleChainHost::network_to_chain_id("unknown"), None);
+    }
+
+    #[test]
+    fn test_effective_chain_id() {
+        use alloy_primitives::B256;
+        
+        // Test explicit chain ID takes precedence
+        let config = SingleChainHost {
+            l1_head: None,
+            agreed_l2_head_hash: None,
+            agreed_l2_output_root: None,
+            claimed_l2_output_root: None,
+            claimed_l2_block_number: None,
+            l2_node_address: None,
+            l1_node_address: None,
+            l1_beacon_address: None,
+            data_dir: None,
+            native: false,
+            server: false,
+            l2_chain_id: Some(999),
+            rollup_config_path: None,
+            enable_experimental_witness_endpoint: false,
+            l2_agreed_prestate: None,
+            depset_config: None,
+            network: Some("base".to_string()),
+            l2_genesis: None,
+            l2_experimental: None,
+            log_level: None,
+            l2_custom: None,
+        };
+        assert_eq!(config.get_effective_chain_id(), Some(999));
+        
+        // Test network fallback
+        let config = SingleChainHost {
+            l1_head: None,
+            agreed_l2_head_hash: None,
+            agreed_l2_output_root: None,
+            claimed_l2_output_root: None,
+            claimed_l2_block_number: None,
+            l2_node_address: None,
+            l1_node_address: None,
+            l1_beacon_address: None,
+            data_dir: None,
+            native: false,
+            server: false,
+            l2_chain_id: None,
+            rollup_config_path: None,
+            enable_experimental_witness_endpoint: false,
+            l2_agreed_prestate: None,
+            depset_config: None,
+            network: Some("base".to_string()),
+            l2_genesis: None,
+            l2_experimental: None,
+            log_level: None,
+            l2_custom: None,
+        };
+        assert_eq!(config.get_effective_chain_id(), Some(8453));
+        
+        // Test no configuration
+        let config = SingleChainHost {
+            l1_head: None,
+            agreed_l2_head_hash: None,
+            agreed_l2_output_root: None,
+            claimed_l2_output_root: None,
+            claimed_l2_block_number: None,
+            l2_node_address: None,
+            l1_node_address: None,
+            l1_beacon_address: None,
+            data_dir: None,
+            native: false,
+            server: false,
+            l2_chain_id: None,
+            rollup_config_path: None,
+            enable_experimental_witness_endpoint: false,
+            l2_agreed_prestate: None,
+            depset_config: None,
+            network: None,
+            l2_genesis: None,
+            l2_experimental: None,
+            log_level: None,
+            l2_custom: None,
+        };
+        assert_eq!(config.get_effective_chain_id(), None);
+    }
+
+    #[test]
+    fn test_op_challenger_with_network_args() {
+        // Test that --network base is correctly parsed and mapped
+        let args = [
+            "single",
+            "--server",
+            "--network", "base",
+            "--l1", "https://l1-url.com",
+            "--l1.beacon", "https://beacon-url.com", 
+            "--l2", "https://l2-url.com",
+            "--datadir", "/tmp/test-data",
+        ];
+
+        let parsed = SingleChainHost::try_parse_from(args);
+        assert!(parsed.is_ok(), "Should parse Base network arguments: {:?}", parsed.err());
+        
+        let config = parsed.unwrap();
+        assert_eq!(config.network, Some("base".to_string()));
+        assert_eq!(config.get_effective_chain_id(), Some(8453));
     }
 
     #[test]

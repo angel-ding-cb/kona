@@ -35,7 +35,14 @@ impl KeyValueStore for SingleChainLocalInputs {
                 self.cfg.claimed_l2_block_number.map(|n| n.to_be_bytes().to_vec())
             }
             L2_CHAIN_ID_KEY => {
-                Some(self.cfg.l2_chain_id.unwrap_or_default().to_be_bytes().to_vec())
+                let chain_id = self.cfg.get_effective_chain_id().unwrap_or_else(|| {
+                    println!("WARNING: No chain ID could be determined from --l2-chain-id or --network, defaulting to 0!");
+                    println!("For Base networks, configure op-challenger to pass:");
+                    println!("  --network base (for Base Mainnet)");
+                    println!("  --network base-sepolia (for Base Sepolia)");
+                    0
+                });
+                Some(chain_id.to_be_bytes().to_vec())
             }
             L2_ROLLUP_CONFIG_KEY => {
                 let rollup_config = self.cfg.read_rollup_config().ok()?;
